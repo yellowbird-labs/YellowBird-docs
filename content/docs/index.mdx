@@ -1,9 +1,9 @@
 ---
 title: Overview
-description: YellowBird splits video upload from FFmpeg so the API stays up while renditions encode.
+description: Documentation for YellowBird, a Go media pipeline. Upload, FFmpeg renditions, the HTTP API, and the worker.
 ---
 
-An upload lands in object storage and in a `media` row. The API publishes the job id on Redis. `cmd/worker` claims that id and runs FFmpeg.
+YellowBird stores an upload in object storage and in a `media` row. The API publishes the job id on Redis. `cmd/worker` claims that id and runs FFmpeg.
 
 The split exists because the first deployment was one `t3.micro`. A single 1080p upload exhausted memory and the kernel OOM killer froze the box, SSH included. The HTTP server and the encoder were the same process. They are now `cmd/api` and `cmd/worker`.
 

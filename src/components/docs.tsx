@@ -12,13 +12,22 @@ export interface DocsProps extends ProviderProps {
   toc: TOCItemType[];
 }
 
-export function Docs({ tree, title, description, toc, children, ...props }: DocsProps) {
+export function Docs({ tree, title, description, toc, children, pathname, ...props }: DocsProps) {
   const data = useFumadocsLoader({ tree });
+  const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+  const home = pathname.replace(/\/$/, '') === base;
 
   return (
-    <Provider {...props}>
+    <Provider pathname={pathname} {...props}>
       <DocsLayout {...baseOptions()} tree={data.tree}>
         <DocsPage toc={toc}>
+          {home ? null : (
+            <nav className="docs-crumb" aria-label="Breadcrumb">
+              <a href={base}>Docs</a>
+              <span aria-hidden="true">/</span>
+              <span>{title}</span>
+            </nav>
+          )}
           <DocsTitle>{title}</DocsTitle>
           {description ? <DocsDescription>{description}</DocsDescription> : null}
           {children}

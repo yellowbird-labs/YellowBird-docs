@@ -8,4 +8,9 @@ const server = createFromSource(source, {
 
 export const prerender = true;
 
-export const GET: APIRoute = async () => server.staticGET();
+export const GET: APIRoute = async () => {
+  const response = await server.staticGET();
+  const headers = new Headers(response.headers);
+  headers.set('X-Robots-Tag', 'noindex');
+  return new Response(response.body, { status: response.status, headers });
+};

@@ -12,12 +12,26 @@ interface Props {
 
 const { page, pageTree } = Astro.props;
 const { body: Content, toc } = await page.data.load();
+const path = Astro.url.pathname.replace(/\/$/, '');
+const documentTitles: Record<string, string> = {
+  '/docs': 'YellowBird docs',
+  '/docs/architecture': 'YellowBird architecture',
+  '/docs/product': 'YellowBird workspace',
+  '/docs/api': 'YellowBird API',
+  '/docs/workers': 'YellowBird workers',
+  '/docs/cloud': 'YellowBird on AWS',
+  '/docs/run': 'Run YellowBird locally',
+};
 const params = Object.fromEntries(
   Object.entries(Astro.params).map(([key, value]) => [key, value == null ? undefined : String(value)]),
 );
 ---
 
-<Layout title={page.data.title} description={page.data.description}>
+<Layout
+  title={page.data.title}
+  description={page.data.description}
+  documentTitle={documentTitles[path] ?? `${page.data.title} · YellowBird docs`}
+>
   <Docs
     client:load
     transition:persist="docs"

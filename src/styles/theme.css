@@ -223,6 +223,25 @@ a[aria-label='YellowBird repository on GitHub'] {
   font-weight: 400;
 }
 
+.docs-crumb {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.docs-crumb a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.docs-crumb a:hover {
+  color: var(--ink);
+}
+
 .pipeline-stack figcaption {
   margin-top: 0.75rem;
   color: var(--muted);

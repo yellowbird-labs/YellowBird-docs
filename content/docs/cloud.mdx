@@ -1,6 +1,6 @@
 ---
 title: Cloud
-description: ECS Fargate for the two binaries, S3 without a NAT Gateway, and GitHub Actions assuming an IAM role.
+description: YellowBird in production. ECS Fargate for the API and worker, S3, and a GitHub Actions deploy role.
 ---
 
 Production is `us-east-1`. DNS for `api.amaanworks.me` is on Cloudflare and points at an Application Load Balancer. The API container listens on port 8080. TLS ends at the load balancer. The worker has no public listener.
@@ -58,3 +58,5 @@ The role name is `yellowbird-github-actions-role`. The account id is not part of
 ## Terraform
 
 `YellowBird-ops` is a separate repository so a docs or application change does not apply infrastructure, and an infrastructure change does not ship a new encoder. The stack wants Terraform `>= 1.10` and the AWS provider `~> 5`. State is an encrypted S3 backend that uses a lockfile. Apply it from that repo, with `terraform.tfvars` kept out of git. The example variables file is the template. The real one has credentials and resource ids.
+
+What the API and the worker do is on [Architecture](./architecture).

@@ -1,6 +1,6 @@
 ---
 title: API
-description: HTTP routes on the Gin server, which ones require a JWT, and the upload body.
+description: YellowBird HTTP API. Gin routes, which ones require a JWT, and the multipart upload body.
 ---
 
 Base URL in production: `https://api.amaanworks.me`. Versioned routes live under `/api/v1`. Send `Authorization: Bearer <token>` on every route that says protected. The token is the `token` field from login.
@@ -56,3 +56,5 @@ curl -X POST https://api.amaanworks.me/api/v1/media \
 ```
 
 The response is the media row. `status` starts at `uploaded` and later becomes `processing`, then `ready` or `failed`. Read it back with `GET /api/v1/media/:id`, and read outputs with `GET /api/v1/renditions?media_id=:id`.
+
+The process that encodes those jobs is [Workers](./workers). The queue those ids land on is [Architecture](./architecture).

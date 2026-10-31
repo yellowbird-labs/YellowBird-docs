@@ -1,6 +1,6 @@
 ---
 title: Workspace
-description: The Next.js app signs you in, uploads a file, and polls jobs until the media row settles.
+description: The YellowBird workspace. A Next.js app for sign-in, upload, job status, and renditions.
 ---
 
 The workspace is the Next.js app hosted at `yellowbird.amaanworks.me`. It is not this docs site. The API origin is `NEXT_PUBLIC_API_URL`, and the client falls back to `https://api.amaanworks.me`. Every call is under `/api/v1`.
@@ -16,3 +16,5 @@ Upload is `POST /media` with `FormData`: `project_id` and `file`. The browser us
 The player on the home page is the local file while the upload is in flight, then the rendition URL the API stored. Labels are the rendition type or the target height (`360p`, `720p`, `1080p`). Poster and preview keep those names.
 
 Sign-out clears the token the client stored. Protected calls send `Authorization: Bearer <token>`. A 401 from a protected call drops the session.
+
+Request paths and bodies are on [API](./api).

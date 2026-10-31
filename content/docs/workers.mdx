@@ -1,6 +1,6 @@
 ---
 title: Workers
-description: Redis consumer group, FFmpeg flags for each rendition, and when a job lands on the dead-letter stream.
+description: YellowBird workers. Redis consumer group, FFmpeg flags for each rendition, and the dead-letter stream.
 ---
 
 `go run ./cmd/worker` joins consumer group `yellowbird-workers` on stream `yellowbird:jobs`. One process runs up to `WORKER_CONCURRENCY` FFmpeg jobs. The slot is a buffered channel used as a semaphore. The default in the API README is 4.
@@ -30,3 +30,5 @@ Every command sets `-threads 0` and `-y`. Output is a temp file, then an upload.
 | `deliveryCount >= 3` | Message is copied to `yellowbird:jobs:dlq`, job is `failed`, `SyncStatus` runs, original message is acked. |
 
 `SyncStatus` is a transaction that locks the media row. Workers finishing 360p and 1080p at the same time cannot both decide the parent status.
+
+The stream and the media lock are on [Architecture](./architecture). Local startup is on [Run it](./run).
