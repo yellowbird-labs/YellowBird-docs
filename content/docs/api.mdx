@@ -3,9 +3,9 @@ title: API
 description: YellowBird HTTP API. Gin routes, which ones require a JWT, and the multipart upload body.
 ---
 
-Base URL in production: `https://api.amaanworks.me`. Versioned routes live under `/api/v1`. Send `Authorization: Bearer <token>` on every route that says protected. The token is the `token` field from login.
+Base URL in production: https://api.amaanworks.me. Versioned routes live under /api/v1. Send Authorization: Bearer and the token on every route that says protected. The token is the token field from login.
 
-`GET /health` is outside the version prefix. The handler returns:
+GET /health is outside the version prefix. The handler returns:
 
 ```json
 { "status": "ok (also my first gin response)" }
@@ -18,9 +18,9 @@ Base URL in production: `https://api.amaanworks.me`. Versioned routes live under
 | `POST` | `/api/v1/users/register` | Public | `name` (2–100), `email`, `password` (8–72) |
 | `POST` | `/api/v1/users/login` | Public | `email`, `password` |
 
-Login returns `{ "token", "user" }`. `user` is `id`, `name`, `email`, `created_at`, `updated_at`. A bad password is `invalid email or password`. Passwords are bcrypt hashes.
+Login returns a token and a user. The user is id, name, email, created_at, and updated_at. A bad password is "invalid email or password". Passwords are bcrypt hashes.
 
-`GET /api/v1/users`, `GET /api/v1/users/:id`, and `DELETE /api/v1/users/:id` are registered on the users group in `internal/domain/user/routes.go` without the JWT middleware. Projects, media, jobs, and renditions all call `middleware.Auth`. The user routes do not.
+GET, GET by id, and DELETE on /api/v1/users are registered in internal/domain/user/routes.go without the JWT middleware. Projects, media, jobs, and renditions all call middleware.Auth. The user routes do not.
 
 ## Projects, media, jobs, renditions
 
@@ -46,7 +46,7 @@ All of these require a JWT.
 | `GET` | `/api/v1/renditions/:id` | Includes the download URL |
 | `DELETE` | `/api/v1/renditions/:id` | |
 
-You do not need to create jobs yourself for a normal upload. `internal/domain/media/service.go` creates the thumbnail and preview jobs, and for a `video/*` MIME type it also creates transcodes at 360, 720, and 1080. Each of those calls inserts the row and enqueues the id.
+You do not need to create jobs yourself for a normal upload. internal/domain/media/service.go creates the thumbnail and preview jobs, and for a video MIME type it also creates transcodes at 360, 720, and 1080. Each of those calls inserts the row and enqueues the id.
 
 ```bash
 curl -X POST https://api.amaanworks.me/api/v1/media \
@@ -55,6 +55,6 @@ curl -X POST https://api.amaanworks.me/api/v1/media \
   -F "file=@sample.mp4"
 ```
 
-The response is the media row. `status` starts at `uploaded` and later becomes `processing`, then `ready` or `failed`. Read it back with `GET /api/v1/media/:id`, and read outputs with `GET /api/v1/renditions?media_id=:id`.
+The response is the media row. Status starts at uploaded and later becomes processing, then ready or failed. Read it back with GET /api/v1/media/:id, and read outputs with GET /api/v1/renditions?media_id=:id.
 
 The process that encodes those jobs is [Workers](./workers). The queue those ids land on is [Architecture](./architecture).

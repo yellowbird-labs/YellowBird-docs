@@ -42,7 +42,6 @@ export function PipelineStack() {
           );
         })}
       </svg>
-      <figcaption>Illustrative. Each plate is a process or store. Spacing is not a scale.</figcaption>
     </figure>
   );
 }

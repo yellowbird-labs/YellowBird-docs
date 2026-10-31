@@ -3,7 +3,7 @@ title: Run it
 description: Run the YellowBird API and worker locally with Go, Postgres, Redis, and FFmpeg.
 ---
 
-You need Go 1.26 or newer, Docker, and FFmpeg if the worker runs outside a container. The module is `github.com/dexisback/YellowBird`.
+You need Go 1.26 or newer, Docker, and FFmpeg if the worker runs outside a container. The module is github.com/dexisback/YellowBird.
 
 ```bash
 cp .env.example .env
@@ -22,7 +22,7 @@ cp .env.example .env
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Used when the provider is not `s3` | |
 | `WORKER_CONCURRENCY` | Parallel FFmpeg processes | `4` |
 
-Do not commit `.env`.
+Do not commit .env.
 
 Backing services only:
 
@@ -37,7 +37,7 @@ go run ./cmd/api
 go run ./cmd/worker
 ```
 
-The compose file can also build the API and the worker. Read `deployments/docker-compose.yml` before you assume it starts Postgres. The README in the Go repo starts Redis from that file and expects you to point `DATABASE_URL` at a database you already have.
+The compose file can also build the API and the worker. Read deployments/docker-compose.yml before you assume it starts Postgres. The README in the Go repo starts Redis from that file and expects you to point DATABASE_URL at a database you already have.
 
 Check the process:
 
@@ -45,4 +45,4 @@ Check the process:
 curl -s http://localhost:8080/health
 ```
 
-Then register, log in, create a project, and upload. The calls are on the [API](./api) page. The workspace is optional for that loop. Set `NEXT_PUBLIC_API_URL` to `http://localhost:8080` if you run the Next.js app against this API.
+Then register, log in, create a project, and upload. The calls are on the [API](./api) page. The workspace is optional for that loop. Set NEXT_PUBLIC_API_URL to http://localhost:8080 if you run the Next.js app against this API.

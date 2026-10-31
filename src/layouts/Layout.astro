@@ -1,7 +1,7 @@
 ---
 import { ClientRouter } from 'astro:transitions';
 import '@/styles/global.css';
-import monoLatin from '@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2?url';
+import interLatin from '@fontsource/inter/files/inter-latin-400-normal.woff2?url';
 
 interface Props {
   title: string;
@@ -97,7 +97,7 @@ const robots = index ? 'index, follow, max-image-preview:large, max-snippet:-1' 
     <meta name="theme-color" content="#ffffff" />
     <link rel="canonical" href={canonical.href} />
     <link rel="icon" href={`${basePath}/favicon.svg`} type="image/svg+xml" />
-    <link rel="preload" href={monoLatin} as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href={interLatin} as="font" type="font/woff2" crossorigin />
     <meta property="og:type" content={kind} />
     <meta property="og:locale" content="en_US" />
     <meta property="og:site_name" content="YellowBird docs" />

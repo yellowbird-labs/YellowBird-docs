@@ -3,13 +3,13 @@ title: Cloud
 description: YellowBird in production. ECS Fargate for the API and worker, S3, and a GitHub Actions deploy role.
 ---
 
-Production is `us-east-1`. DNS for `api.amaanworks.me` is on Cloudflare and points at an Application Load Balancer. The API container listens on port 8080. TLS ends at the load balancer. The worker has no public listener.
+Production is us-east-1. DNS for api.amaanworks.me is on Cloudflare and points at an Application Load Balancer. The API container listens on port 8080. TLS ends at the load balancer. The worker has no public listener.
 
-The shape replaced a single EC2 instance that ran Docker Compose, reached through a Cloudflare tunnel, and died under one encode. The instance size was `t3.micro`.
+The shape replaced a single EC2 instance that ran Docker Compose, reached through a Cloudflare tunnel, and died under one encode. The instance size was t3.micro.
 
 ## Network
 
-Terraform in `YellowBird-ops` describes the VPC. The address block is `10.0.0.0/16`.
+Terraform in YellowBird-ops describes the VPC. The address block is 10.0.0.0/16.
 
 | Subnet | CIDR | Zone |
 | --- | --- | --- |
@@ -18,20 +18,20 @@ Terraform in `YellowBird-ops` describes the VPC. The address block is `10.0.0.0/
 | Private 1 | `10.0.128.0/20` | `us-east-1a` |
 | Private 2 | `10.0.144.0/20` | `us-east-1b` |
 
-Public subnets use an internet gateway. S3 traffic uses a gateway VPC endpoint, `com.amazonaws.us-east-1.s3`, attached to the route tables. A gateway endpoint stays on the AWS network, so that traffic does not go through a NAT Gateway. The endpoint is the cost control for video bytes. Do not publish the endpoint id or the VPC id from the Terraform import blocks.
+Public subnets use an internet gateway. S3 traffic uses a gateway VPC endpoint, com.amazonaws.us-east-1.s3, attached to the route tables. A gateway endpoint stays on the AWS network, so that traffic does not go through a NAT Gateway. The endpoint is the cost control for video bytes. Do not publish the endpoint id or the VPC id from the Terraform import blocks.
 
 ## Compute
 
-Both services are ECS on Fargate, cluster `yellowbird-cluster`, desired count 1.
+Both services are ECS on Fargate, cluster yellowbird-cluster, desired count 1.
 
 | Service | CPU | Memory | Port |
 | --- | --- | --- | --- |
 | `yellowbird-api-service` | 0.5 vCPU (`512`) | 1024 MB | 8080 |
 | `yellowbird-worker-service` | 1 vCPU (`1024`) | 2048 MB | none public |
 
-Terraform ignores changes to `task_definition` and `desired_count` on those services. The deploy workflow updates the task definition with the image it just pushed. A later `terraform apply` is not supposed to roll that image back.
+Terraform ignores changes to task_definition and desired_count on those services. The deploy workflow updates the task definition with the image it just pushed. A later terraform apply is not supposed to roll that image back.
 
-Images are `yellowbird-api` and `yellowbird-worker` in ECR, built from `deployments/Dockerfile.api` and `deployments/Dockerfile.worker`. Tags are the git SHA and `latest`.
+Images are yellowbird-api and yellowbird-worker in ECR, built from deployments/Dockerfile.api and deployments/Dockerfile.worker. Tags are the git SHA and latest.
 
 ## Data and secrets
 
