@@ -3,9 +3,41 @@ title: Architecture
 description: How a single upload travels from the browser through the API, Redis, the worker, and object storage to produce finished renditions.
 ---
 
-import { PipelineStack } from '@/components/pipeline-stack';
+export const architectureDiagram = `
+flowchart TD
+    Browser["Browser"]
 
-<PipelineStack />
+    subgraph api ["cmd/api"]
+        A["Gin HTTP server"]
+    end
+
+    subgraph store ["Storage"]
+        direction LR
+        S[("S3 / Cloudinary")]
+        P[("PostgreSQL")]
+    end
+
+    subgraph queue ["Redis"]
+        Q[["yellowbird:jobs"]]
+    end
+
+    subgraph worker ["cmd/worker"]
+        direction TB
+        W["goroutine pool"]
+        F["FFmpeg"]
+        D["Dead-letter queue"]
+    end
+
+    Browser -->|"POST /api/v1/media + JWT"| api
+    api --> store
+    api -->|"XADD"| queue
+    queue -->|"XREADGROUP"| worker
+    worker --> store
+    worker -->|"XACK"| queue
+    Browser -.->|"poll every 2.5 s"| api
+`
+
+<Mermaid chart={architectureDiagram} />
 
 The browser never speaks to Redis or to the encoder. It sends a file to `cmd/api`. The API writes the bytes to object storage, records the upload in PostgreSQL, and publishes one message per job to a Redis stream. `cmd/worker` is a separate binary running its own event loop — it reads those messages, fetches the source from storage, runs FFmpeg, and writes results back to Postgres.
 

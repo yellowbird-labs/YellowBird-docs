@@ -1,4 +1,6 @@
 ---
+import { statSync, readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import Layout from '@/layouts/Layout.astro';
 import { Docs } from '@/components/docs';
 import type { source } from '@/lib/source';
@@ -13,6 +15,7 @@ interface Props {
 const { page, pageTree } = Astro.props;
 const { body: Content, toc } = await page.data.load();
 const path = Astro.url.pathname.replace(/\/$/, '');
+
 const documentTitles: Record<string, string> = {
   '/docs': 'YellowBird docs',
   '/docs/run': 'Run YellowBird locally',
@@ -22,9 +25,30 @@ const documentTitles: Record<string, string> = {
   '/docs/ops': 'YellowBird on AWS',
   '/docs/api': 'YellowBird API',
 };
+
 const params = Object.fromEntries(
   Object.entries(Astro.params).map(([key, value]) => [key, value == null ? undefined : String(value)]),
 );
+
+// Read raw MDX source and last-modified date
+const slugPath = page.slugs.length > 0 ? page.slugs.join('/') : 'index';
+const mdxPath = new URL(`../../content/docs/${slugPath}.mdx`, import.meta.url);
+let rawMdx = '';
+let lastModified = '';
+try {
+  const filePath = fileURLToPath(mdxPath);
+  rawMdx = readFileSync(filePath, 'utf-8');
+  // Strip frontmatter for the "Copy as Markdown" content
+  rawMdx = rawMdx.replace(/^---[\s\S]*?---\n/, '').trim();
+  const stat = statSync(filePath);
+  lastModified = stat.mtime.toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+} catch {
+  // File not found or unreadable — omit gracefully
+}
 ---
 
 <Layout
@@ -41,6 +65,8 @@ const params = Object.fromEntries(
     title={page.data.title}
     description={page.data.description}
     toc={toc}
+    rawMdx={rawMdx}
+    lastModified={lastModified}
   >
     <Content />
   </Docs>

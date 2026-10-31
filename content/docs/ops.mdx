@@ -3,6 +3,62 @@ title: Ops and cloud
 description: AWS infrastructure, Fargate services, the Terraform workflow, and the GitHub Actions deploy pipeline.
 ---
 
+export const opsDiagram = `
+flowchart TD
+    subgraph cicd ["CI / CD"]
+        direction LR
+        GH["GitHub Actions"]
+        TF["Terraform"]
+    end
+
+    subgraph ingress ["Global Ingress"]
+        direction LR
+        CF["Cloudflare DNS"]
+        ALB["ALB - TLS termination"]
+    end
+
+    subgraph vpc ["AWS VPC  us-east-1  10.0.0.0/16"]
+        OIDC["IAM OIDC"]
+        ECR["ECR"]
+        SSM["SSM Secrets"]
+        S3GW["S3 Gateway Endpoint"]
+        CW["CloudWatch"]
+
+        subgraph ecs ["ECS Fargate"]
+            direction TB
+            API["api-service  0.5 vCPU / 1 GB"]
+            WKR["worker-service  1 vCPU / 2 GB"]
+        end
+    end
+
+    subgraph managed ["Managed Serverless"]
+        direction TB
+        Redis["Upstash Redis"]
+        Neon["Neon Postgres"]
+        S3["S3 Bucket"]
+    end
+
+    GH -->|"OIDC"| OIDC
+    OIDC --> ECR
+    TF -->|"terraform apply"| vpc
+    ECR --> ecs
+    CF --> ALB
+    ALB --> API
+    SSM --> API
+    SSM --> WKR
+    API --> S3GW
+    WKR --> S3GW
+    S3GW --> S3
+    API -->|"XADD"| Redis
+    WKR -->|"XREADGROUP"| Redis
+    API --> Neon
+    WKR --> Neon
+    API --> CW
+    WKR --> CW
+`
+
+<Mermaid chart={opsDiagram} />
+
 Production runs in `us-east-1`. The API is reachable at `api.amaanworks.me`, a Cloudflare DNS record pointed at an Application Load Balancer. TLS terminates at the load balancer using an ACM wildcard certificate for `*.amaanworks.me`. HTTP is redirected to HTTPS at the listener level. The worker has no public endpoint and no target group.
 
 The earlier deployment was a single `t3.micro` running both processes behind Docker Compose and a Cloudflare tunnel. A single 1080p encode was enough to exhaust it. The current design puts the API and worker into separate Fargate services, so encoding pressure can't affect HTTP response times.

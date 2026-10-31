@@ -10,6 +10,7 @@
   --ink: #1a1918;
   --paper: #fafaf9;
   --accent: #a2cffe;
+  --accent-hover: #8ebff5;
   --muted: #6b6560;
   --line: rgba(26, 25, 24, 0.11);
   --code: #f0eeec;
@@ -49,6 +50,8 @@
 .dark {
   --ink: #e6e4e1;
   --paper: #111110;
+  --accent: #1e3247;
+  --accent-hover: #263f59;
   --muted: #888480;
   --line: rgba(230, 228, 225, 0.09);
   --code: #1b1a19;

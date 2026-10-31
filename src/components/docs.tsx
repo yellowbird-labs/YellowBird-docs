@@ -1,8 +1,9 @@
 import { type SerializedPageTree, useFumadocsLoader } from 'fumadocs-core/source/client';
 import type { TOCItemType } from 'fumadocs-core/toc';
 import { DocsLayout } from 'fumadocs-ui/layouts/docs';
-import { DocsDescription, DocsPage, DocsTitle } from 'fumadocs-ui/layouts/docs/page';
+import { DocsBody, DocsDescription, DocsPage, DocsTitle } from 'fumadocs-ui/layouts/docs/page';
 import { Provider, type ProviderProps } from '@/components/provider';
+import { PageActions } from '@/components/PageActions';
 import { baseOptions } from '@/lib/layout.shared';
 
 export interface DocsProps extends ProviderProps {
@@ -10,9 +11,21 @@ export interface DocsProps extends ProviderProps {
   title: string;
   description?: string;
   toc: TOCItemType[];
+  rawMdx?: string;
+  lastModified?: string;
 }
 
-export function Docs({ tree, title, description, toc, children, pathname, ...props }: DocsProps) {
+export function Docs({
+  tree,
+  title,
+  description,
+  toc,
+  children,
+  pathname,
+  rawMdx,
+  lastModified,
+  ...props
+}: DocsProps) {
   const data = useFumadocsLoader({ tree });
   const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   const home = pathname.replace(/\/$/, '') === base;
@@ -30,7 +43,13 @@ export function Docs({ tree, title, description, toc, children, pathname, ...pro
           )}
           <DocsTitle>{title}</DocsTitle>
           {description ? <DocsDescription>{description}</DocsDescription> : null}
-          {children}
+          <PageActions
+            title={title}
+            description={description}
+            rawMdx={rawMdx}
+            lastModified={lastModified}
+          />
+          <DocsBody>{children}</DocsBody>
         </DocsPage>
       </DocsLayout>
     </Provider>
