@@ -1,0 +1,42 @@
+---
+title: Ops and cloud
+description: AWS infrastructure, Fargate services, the Terraform workflow, and the GitHub Actions deploy pipeline.
+---
+
+Production runs in `us-east-1`. The API is reachable at `api.amaanworks.me`, a Cloudflare DNS record pointed at an Application Load Balancer. TLS terminates at the load balancer using an ACM wildcard certificate for `*.amaanworks.me`. HTTP is redirected to HTTPS at the listener level. The worker has no public endpoint and no target group.
+
+The earlier deployment was a single `t3.micro` running both processes behind Docker Compose and a Cloudflare tunnel. A single 1080p encode was enough to exhaust it. The current design puts the API and worker into separate Fargate services, so encoding pressure can't affect HTTP response times.
+
+## Network
+
+The VPC has two public subnets (`10.0.0.0/20` and `10.0.16.0/20`) and two private subnets (`10.0.128.0/20` and `10.0.144.0/20`). The public route table sends `0.0.0.0/0` to an internet gateway. Both Fargate services run in the public subnets with public IPs assigned — the private subnets exist in the Terraform module but tasks are not placed there.
+
+An S3 gateway endpoint is attached to the route tables so the tasks reach S3 over the AWS backbone without a NAT gateway, avoiding per-GB data-processing charges.
+
+The media bucket (`yellowbird-media-amaan`) has a CORS policy allowing `GET` and `HEAD` from any origin, so browsers can play rendition URLs directly without routing through the API.
+
+## Services
+
+Both services belong to cluster `yellowbird-cluster`.
+
+The API service (`yellowbird-api-service`) runs at 512 CPU units and 1024 MB. The container listens on port 8080 and is registered with the load balancer target group. Desired count is 1.
+
+The worker service (`yellowbird-worker-service`) runs at 1024 CPU units and 2048 MB — extra headroom for FFmpeg. `WORKER_CONCURRENCY` is set to 4 in the task definition. It has no target group and no inbound listener.
+
+Both services are configured to ignore changes to `task_definition` and `desired_count` after the initial apply. A deployment from GitHub or a manual scale in the console won't be overwritten by the next Terraform plan.
+
+## Secrets and environment
+
+Non-sensitive configuration is embedded directly in the task definition: `PORT`, `STORAGE_PROVIDER`, `S3_BUCKET`, `S3_REGION`, `REDIS_ADDR`, `REDIS_DB`. Secrets — `DATABASE_URL`, `REDIS_PASSWORD`, `JWT_SECRET` — are read from SSM Parameter Store at paths under `/yellowbird/production/`. The database parameter points to a Neon serverless Postgres instance. The Redis password is for Upstash. Neither value lives in any repository.
+
+The task execution role can read those SSM parameters. The task role has access to the media bucket. Omitting static AWS credentials in the task definition means the SDK uses the ECS task role credential chain automatically.
+
+## Infrastructure repository
+
+`YellowBird-ops` manages Terraform. The configuration requires Terraform `>= 1.10` and the AWS provider `~> 5`. State lives in an encrypted S3 bucket with `use_lockfile = true`. `terraform.tfvars` holds the database URL, Redis password, and JWT secret — it stays out of git. `terraform.tfvars.example` is the committed template.
+
+Infrastructure changes require running `terraform apply` by hand from that repository. Pushing to the Go repo's `main` branch does not touch Terraform.
+
+## Deploy pipeline
+
+A push to `main` in the Go repository triggers `.github/workflows/deploy.yaml`. The workflow assumes `yellowbird-github-actions-role` through GitHub OIDC — there are no long-lived access keys in the repository secrets. It runs the full test suite (`go test -count=1 ./...` and `go test -race ./internal/...`), installs FFmpeg (needed for integration tests), builds `deployments/Dockerfile.api` and `deployments/Dockerfile.worker`, pushes both to ECR tagged with the git SHA and `latest`, then forces a new deployment on each ECS service. Logs stream to CloudWatch groups for the API and worker separately.

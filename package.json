@@ -7,7 +7,7 @@
     "node": ">=22.23.4"
   },
   "scripts": {
-    "dev": "astro dev",
+    "dev": "node --import ./scripts/register-react-opts.mjs ./node_modules/astro/bin/astro.mjs dev",
     "build": "node --import ./scripts/register-react-opts.mjs ./node_modules/astro/bin/astro.mjs build",
     "preview": "astro preview"
   },

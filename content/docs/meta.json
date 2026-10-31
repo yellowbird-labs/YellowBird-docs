@@ -1,4 +1,4 @@
 {
   "title": "YellowBird",
-  "pages": ["index", "architecture", "product", "api", "workers", "cloud", "run"]
+  "pages": ["index", "run", "architecture", "backend", "web", "ops", "api"]
 }

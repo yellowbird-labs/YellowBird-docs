@@ -6,14 +6,15 @@ import fumadocs from '@fumadocs/astro';
 import sitemap from '@astrojs/sitemap';
 
 const origin = 'https://yellowbird.amaanworks.me';
+/** @type {Record<string, string>} */
 const docPages = {
   [`${origin}/docs`]: 'index',
-  [`${origin}/docs/architecture`]: 'architecture',
-  [`${origin}/docs/product`]: 'product',
-  [`${origin}/docs/api`]: 'api',
-  [`${origin}/docs/workers`]: 'workers',
-  [`${origin}/docs/cloud`]: 'cloud',
   [`${origin}/docs/run`]: 'run',
+  [`${origin}/docs/architecture`]: 'architecture',
+  [`${origin}/docs/backend`]: 'backend',
+  [`${origin}/docs/web`]: 'web',
+  [`${origin}/docs/ops`]: 'ops',
+  [`${origin}/docs/api`]: 'api',
 };
 
 export default defineConfig({
@@ -26,7 +27,7 @@ export default defineConfig({
       rehypeCodeOptions: {
         themes: {
           light: 'github-light',
-          dark: 'github-light',
+          dark: 'github-dark',
         },
       },
     }),

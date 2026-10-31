@@ -1,0 +1,80 @@
+---
+title: Backend
+description: The Go module — two binaries, the Redis queue, PostgreSQL schema, and the FFmpeg processing pipeline.
+---
+
+The Go module (`github.com/dexisback/YellowBird`, Go 1.26.5) compiles two binaries from a single codebase. `cmd/api` is a Gin HTTP server that accepts uploads and issues JWT tokens. `cmd/worker` is a pool of goroutines that pull job IDs from Redis, fetch source files from object storage, and shell out to FFmpeg.
+
+Both processes share a PostgreSQL database through GORM and a Redis stream through `internal/queue`. They do not share a process — the split exists because the original deployment ran both on a single `t3.micro`, and one 1080p encode froze the box. On Fargate, an expensive encode can saturate the worker's CPU without touching the API.
+
+## Data model
+
+Five tables form a chain: users own projects, projects contain media, and each media row has many jobs and many renditions.
+
+**Users** store a bcrypt hash alongside name and email. There is no external auth provider. Tokens are HS256 JWTs with a 24-hour expiry, issued at login.
+
+**Projects** are organizational namespaces. Every upload requires a project ID, and the API verifies ownership before accepting the file.
+
+**Media** tracks the original upload. Status advances through `uploaded` → `processing` → `ready`, or to `failed` if any job exhausts its retries. The `pending` and `uploading` states exist in the model but are not written by the current upload path.
+
+**Jobs** represent individual processing tasks — thumbnail, preview, or transcode. Each carries a type, an optional target height for transcodes, and a status of `queued`, `running`, `completed`, or `failed`.
+
+**Renditions** are the output files. Each points to a media row, carries a type, a storage key, a public URL, and optional dimension metadata. There is no foreign key linking a rendition back to the job that produced it; the shared `media_id` and rendition `type` are the implicit link.
+
+Schema changes run as GORM `AutoMigrate` on API startup. There is no versioned migration directory on the startup path.
+
+## Queue
+
+The Redis stream is `yellowbird:jobs`. Workers join consumer group `yellowbird-workers`, each identified as `<hostname>-<pid>`. The dead-letter stream is `yellowbird:jobs:dlq`.
+
+When a job is created, `CreateJob` inserts the Postgres row and calls `XADD` with the row's UUID as the message value. The message stays pending in Redis until `XACK` fires after a successful encode. If the worker process dies before that point, the message remains in the pending-entries list.
+
+A recovery loop runs every 30 seconds. Any pending message idle for five minutes is claimed with `XCLAIM`. When the delivery count reaches three (controlled by `maxRetries` in `internal/queue/redis.go`), the worker marks the job failed, runs `SyncStatus`, copies the message to the dead-letter stream, and acknowledges the original. A job whose database status has already moved past `queued` is acked and silently dropped — duplicate delivery after the database has moved on is harmless.
+
+Unknown job types fail immediately without consuming any retry budget.
+
+## Source caching
+
+When a video generates five jobs (thumbnail, preview, 360p, 720p, 1080p), those jobs may run concurrently on the same worker. `internal/worker/cache.go` writes the source file to a local directory under the OS temp path (`yellowbird-cache`) and keeps it for 15 minutes. A `singleflight` guard ensures concurrent goroutines for sibling jobs share one download rather than each pulling separately from object storage.
+
+The module's README describes this as an in-memory cache. The implementation is a disk cache.
+
+Worker goroutines run with `context.WithoutCancel`, detached from the process shutdown signal. A `SIGTERM` does not abort an in-flight FFmpeg call — the process drains in-flight goroutines before exiting. Concurrency is bounded by a buffered channel acting as a semaphore, sized by `WORKER_CONCURRENCY`.
+
+## FFmpeg pipeline
+
+All commands set `-y` to overwrite output without prompting, and `-threads 0` to let FFmpeg choose its thread count.
+
+**Thumbnail** — runs on any file type, produces a JPEG:
+
+```bash
+ffmpeg -y -threads 0 -i <source> -frames:v 1 -q:v 2 <output>.jpg
+```
+
+**Preview** — runs on any file type, produces a 10-second MP4 with audio:
+
+```bash
+ffmpeg -y -threads 0 -i <source> -t 10 -c:v libx264 -preset veryfast -crf 28 -c:a aac -movflags +faststart <output>.mp4
+```
+
+**Transcode** — runs only when the MIME type starts with `video/`, produces a full-length H.264 MP4 at the requested height:
+
+```bash
+ffmpeg -y -threads 0 -i <source> -vf scale=-2:<height> -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k -movflags +faststart <output>.mp4
+```
+
+Height must be 360, 720, or 1080. The `scale=-2:<height>` filter preserves aspect ratio and keeps the output width even, which H.264 requires. Thumbnail and preview processors reject a `target_height` value.
+
+The temp output file is uploaded through the same storage factory as the original, a rendition row is inserted, and the temp file is deleted. `SyncStatus` then acquires a `SELECT FOR UPDATE` lock on the parent media row to decide whether all work for that media item is complete.
+
+## Status propagation
+
+`SyncStatus` is called after every job completion or failure. It locks the media row with `SELECT FOR UPDATE` to prevent two workers finishing sibling jobs simultaneously from racing on the state transition.
+
+The rules are straightforward: if the media row is already `failed`, return immediately. If any job has failed, the media row becomes `failed` — regardless of how many siblings completed successfully. If every job is `completed`, the media row becomes `ready`. If at least one job is still `queued` or `running` and the media row is still at `uploaded` or `pending`, it becomes `processing`.
+
+One failed job fails the entire media record.
+
+## Storage
+
+`STORAGE_PROVIDER=s3` uses the AWS SDK with the standard credential chain. In production, the ECS task role provides credentials — there are no static keys in the environment. `S3_ENDPOINT` overrides the endpoint for MinIO or LocalStack in local development. Any other provider value routes to Cloudinary. Object keys follow the pattern `yellowbird/<uuid>-<sanitized-name><ext>`.

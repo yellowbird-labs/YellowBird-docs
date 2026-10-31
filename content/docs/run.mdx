@@ -1,48 +1,58 @@
 ---
-title: Run it
-description: Run the YellowBird API and worker locally with Go, Postgres, Redis, and FFmpeg.
+title: Running locally
+description: Start the YellowBird API and worker on your machine, connect them to a database, and point the web workspace at the local API.
 ---
 
-You need Go 1.26 or newer, Docker, and FFmpeg if the worker runs outside a container. The module is github.com/dexisback/YellowBird.
+You need Go 1.26 or newer, Docker, and FFmpeg on your `PATH`. PostgreSQL must be running before either binary starts — the Docker Compose file starts Redis but not Postgres, so you need to supply a database URL pointing at an existing instance.
 
-```bash
-cp .env.example .env
-```
+Clone `github.com/dexisback/YellowBird`, copy `.env.example` to `.env`, and fill in the values. `internal/config` loads that file first, then reads the process environment on top of it. The example file sets `PORT=3000` — that's the Next.js default, not the API default. Leave `PORT` unset or set it to `8080`; the config defaults to `8080` when the variable is absent. If you run via Docker Compose, the API is always forced to port 8080 regardless.
 
-| Variable | What it is | Example |
-| --- | --- | --- |
-| `PORT` | API listen port | `8080` |
-| `DATABASE_URL` | Postgres | `postgres://postgres:postgres@localhost:5432/yellowbird?sslmode=disable` |
-| `JWT_SECRET` | HMAC secret for login tokens | a long random string |
-| `REDIS_ADDR` | Redis host | `localhost:6379` |
-| `REDIS_PASSWORD` | Empty for local Redis | |
-| `REDIS_DB` | Database index | `0` |
-| `STORAGE_PROVIDER` | `s3` or omit for Cloudinary | `s3` |
-| `S3_BUCKET`, `S3_REGION` | Required when the provider is `s3` | |
-| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Used when the provider is not `s3` | |
-| `WORKER_CONCURRENCY` | Parallel FFmpeg processes | `4` |
+## Environment variables
 
-Do not commit .env.
+| Variable | Description |
+| -------- | ----------- |
+| `PORT` | API listen port. Defaults to `8080` when unset. |
+| `DATABASE_URL` | Postgres connection string. Falls back to `NEON_DB` if unset. |
+| `JWT_SECRET` | HMAC secret for signing and verifying login tokens. |
+| `REDIS_ADDR` | `localhost:6379` on the host; `redis:6379` inside Compose. |
+| `REDIS_PASSWORD` | Leave empty for the local Redis container. |
+| `REDIS_DB` | Database index. Use `0`. |
+| `STORAGE_PROVIDER` | `s3` for AWS S3. Anything else routes to Cloudinary. Setting `S3_BUCKET` without this variable also selects S3. |
+| `S3_BUCKET` | S3 bucket name. |
+| `S3_REGION` | Defaults to `us-east-1` when unset. |
+| `S3_ENDPOINT` | Override the S3 endpoint for MinIO or LocalStack. |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY` | Optional. Omit to use the default credential chain. |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Required when the provider is not S3. |
+| `WORKER_CONCURRENCY` | Parallel FFmpeg jobs per worker process. Defaults to 4. |
 
-Backing services only:
+## Starting the services
+
+Bring up Redis first:
 
 ```bash
 docker compose -f deployments/docker-compose.yml up -d redis
 ```
 
-API and worker on the host, with Postgres already running:
+Then run the API and worker in separate terminals:
 
 ```bash
 go run ./cmd/api
+```
+
+```bash
 go run ./cmd/worker
 ```
 
-The compose file can also build the API and the worker. Read deployments/docker-compose.yml before you assume it starts Postgres. The README in the Go repo starts Redis from that file and expects you to point DATABASE_URL at a database you already have.
+Once both are up, `GET http://localhost:8080/health` returns a JSON object with status `ok`. The worker logs its concurrency on startup and creates the Redis consumer group `yellowbird-workers` if it doesn't already exist.
 
-Check the process:
+If you'd rather not install FFmpeg on the host, you can run everything inside containers instead:
 
 ```bash
-curl -s http://localhost:8080/health
+docker compose -f deployments/docker-compose.yml up --build
 ```
 
-Then register, log in, create a project, and upload. The calls are on the [API](./api) page. The workspace is optional for that loop. Set NEXT_PUBLIC_API_URL to http://localhost:8080 if you run the Next.js app against this API.
+This starts Redis, the API image, and the worker image (which bundles FFmpeg).
+
+## Connecting the web workspace
+
+In the `yellowbird-web` repository, set `NEXT_PUBLIC_API_URL=http://localhost:8080` and run `npm run dev`. The API's CORS allow-list includes `https://yellowbird.amaanworks.me` and localhost on ports 3000, 3001, and 5173. The Next.js dev server on port 3000 is on that list by default.

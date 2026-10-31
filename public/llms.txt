@@ -2,18 +2,16 @@
 
 > Documentation for YellowBird, a Go media pipeline. An upload is stored, a job id is published on Redis, and a separate worker runs FFmpeg.
 
-The docs live at https://yellowbird.amaanworks.me/docs. The API origin is https://api.amaanworks.me. The Go module is https://github.com/dexisback/YellowBird.
+The docs live at https://yellowbird.amaanworks.me/docs. The API origin is https://api.amaanworks.me. The Go module is https://github.com/dexisback/YellowBird. The workspace is a separate Next.js app. AWS is a separate Terraform repo.
 
 ## Docs
 
-- [YellowBird docs](https://yellowbird.amaanworks.me/docs): What the pipeline does, and where the API, workspace, and cloud repos live.
-- [Architecture](https://yellowbird.amaanworks.me/docs/architecture): Gin API and FFmpeg worker as separate processes. Postgres is the record. Redis Streams deliver job ids.
-- [Workspace](https://yellowbird.amaanworks.me/docs/product): Next.js app for sign-in, upload, and renditions.
+- [YellowBird docs](https://yellowbird.amaanworks.me/docs): How the API, workspace, and cloud repos connect.
+- [Run it locally](https://yellowbird.amaanworks.me/docs/run): Postgres, Redis, the API, and the worker on one machine.
+- [Architecture](https://yellowbird.amaanworks.me/docs/architecture): The path of one upload, and what survives a Redis flush.
+- [Backend](https://yellowbird.amaanworks.me/docs/backend): Go processes, tables, Redis Streams, and FFmpeg flags.
+- [Web](https://yellowbird.amaanworks.me/docs/web): The Next.js workspace and the API origin it calls.
+- [Ops and cloud](https://yellowbird.amaanworks.me/docs/ops): ECS Fargate, S3, and which repo deploys images versus infrastructure.
 - [API](https://yellowbird.amaanworks.me/docs/api): HTTP routes, JWT, and the multipart upload body.
-- [Workers](https://yellowbird.amaanworks.me/docs/workers): Redis consumer group, FFmpeg flags, and the dead-letter stream.
-- [Cloud](https://yellowbird.amaanworks.me/docs/cloud): ECS Fargate, S3, and the GitHub Actions deploy role.
-- [Run it](https://yellowbird.amaanworks.me/docs/run): Postgres, Redis, the API, and the worker on a local machine.
-
-## Notes
 
 There is no HLS playlist in the worker. A video upload creates a thumbnail, a 10 second preview, and H.264 MP4s at 360p, 720p, and 1080p.

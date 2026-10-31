@@ -15,12 +15,12 @@ const { body: Content, toc } = await page.data.load();
 const path = Astro.url.pathname.replace(/\/$/, '');
 const documentTitles: Record<string, string> = {
   '/docs': 'YellowBird docs',
-  '/docs/architecture': 'YellowBird architecture',
-  '/docs/product': 'YellowBird workspace',
-  '/docs/api': 'YellowBird API',
-  '/docs/workers': 'YellowBird workers',
-  '/docs/cloud': 'YellowBird on AWS',
   '/docs/run': 'Run YellowBird locally',
+  '/docs/architecture': 'YellowBird architecture',
+  '/docs/backend': 'YellowBird backend',
+  '/docs/web': 'YellowBird web',
+  '/docs/ops': 'YellowBird on AWS',
+  '/docs/api': 'YellowBird API',
 };
 const params = Object.fromEntries(
   Object.entries(Astro.params).map(([key, value]) => [key, value == null ? undefined : String(value)]),

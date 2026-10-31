@@ -1,60 +1,82 @@
 ---
-title: API
-description: YellowBird HTTP API. Gin routes, which ones require a JWT, and the multipart upload body.
+title: API Reference
+description: HTTP endpoints, authentication, and request shapes for the YellowBird API.
 ---
 
-Base URL in production: https://api.amaanworks.me. Versioned routes live under /api/v1. Send Authorization: Bearer and the token on every route that says protected. The token is the token field from login.
+The API is a Gin HTTP server. The production base URL is `https://api.amaanworks.me`. All resource routes are versioned under `/api/v1`. Protected routes require an `Authorization: Bearer <token>` header.
 
-GET /health is outside the version prefix. The handler returns:
+The token is the value returned by the login endpoint — an HS256 JWT with `user_id` in the claims, valid for 24 hours. A missing `Authorization` header returns `missing auth header`. A header present but not in `Bearer <token>` form returns `invalid auth header`.
 
-```json
-{ "status": "ok (also my first gin response)" }
-```
+## Health check
 
-## Auth
+`GET /health` sits outside the version prefix and is not authenticated. It returns a JSON object confirming the server is up.
 
-| Method | Path | Auth | Body |
-| --- | --- | --- | --- |
-| `POST` | `/api/v1/users/register` | Public | `name` (2–100), `email`, `password` (8–72) |
-| `POST` | `/api/v1/users/login` | Public | `email`, `password` |
+## Authentication
 
-Login returns a token and a user. The user is id, name, email, created_at, and updated_at. A bad password is "invalid email or password". Passwords are bcrypt hashes.
+Register and login are public. User list, get, and delete are also on the public router — there is no authentication middleware on the users group in the current codebase.
 
-GET, GET by id, and DELETE on /api/v1/users are registered in internal/domain/user/routes.go without the JWT middleware. Projects, media, jobs, and renditions all call middleware.Auth. The user routes do not.
+| Method | Path | Body |
+| ------ | ---- | ---- |
+| POST | `/api/v1/users/register` | `name` (2–100 chars), `email`, `password` (8–72 chars) |
+| POST | `/api/v1/users/login` | `email`, `password` |
 
-## Projects, media, jobs, renditions
+Registration responds with the created user object. A duplicate email returns `email already exists`. Passwords are stored as bcrypt hashes.
 
-All of these require a JWT.
+Login returns `{ "token": "...", "user": { "id", "name", "email", "created_at", "updated_at" } }`. Incorrect credentials return `invalid email or password`.
+
+## Projects
+
+Projects scope media uploads. All routes require a valid token. The list endpoint returns only projects owned by the authenticated user.
 
 | Method | Path | Notes |
-| --- | --- | --- |
-| `POST` | `/api/v1/projects` | JSON `name`, optional `description` |
-| `GET` | `/api/v1/projects` | Projects for the caller |
-| `GET` | `/api/v1/projects/:id` | |
-| `PUT` | `/api/v1/projects/:id` | |
-| `DELETE` | `/api/v1/projects/:id` | |
-| `POST` | `/api/v1/media` | Multipart `project_id` and `file`. `POST /api/v1/media/upload` is the same handler |
-| `GET` | `/api/v1/media?project_id=` | |
-| `GET` | `/api/v1/media/:id` | Status and metadata |
-| `DELETE` | `/api/v1/media/:id` | |
-| `POST` | `/api/v1/jobs` | `type` is `thumbnail`, `preview`, or `transcode`. Transcode requires `target_height` of 360, 720, or 1080 |
-| `GET` | `/api/v1/jobs?media_id=` | |
-| `GET` | `/api/v1/jobs/:id` | Includes the error string when the job failed |
-| `DELETE` | `/api/v1/jobs/:id` | |
-| `POST` | `/api/v1/renditions` | Usually written by the worker, not the workspace |
-| `GET` | `/api/v1/renditions?media_id=` | |
-| `GET` | `/api/v1/renditions/:id` | Includes the download URL |
-| `DELETE` | `/api/v1/renditions/:id` | |
+| ------ | ---- | ----- |
+| POST | `/api/v1/projects` | Body: `name`, optional `description` |
+| GET | `/api/v1/projects` | Returns the current user's projects |
+| GET | `/api/v1/projects/:id` | |
+| PUT | `/api/v1/projects/:id` | Body: `name`, `description` |
+| DELETE | `/api/v1/projects/:id` | |
 
-You do not need to create jobs yourself for a normal upload. internal/domain/media/service.go creates the thumbnail and preview jobs, and for a video MIME type it also creates transcodes at 360, 720, and 1080. Each of those calls inserts the row and enqueues the id.
+## Media
+
+`POST /api/v1/media` and `POST /api/v1/media/upload` point to the same handler. The request body is multipart with two fields: `project_id` and `file`.
+
+The API verifies that the project belongs to the authenticated user, streams the bytes to object storage, and writes the media row. Processing jobs are created immediately after the media row is committed. A `video/*` MIME type generates five jobs: thumbnail, preview, and H.264 transcodes at 360p, 720p, and 1080p. Any other file type receives thumbnail and preview only. The response is the media row with status `uploaded`.
+
+Poll `GET /api/v1/media/:id` to track status transitions (`uploaded` → `processing` → `ready` or `failed`). Retrieve outputs with `GET /api/v1/renditions?media_id=<id>`.
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| POST | `/api/v1/media` | Multipart: `project_id`, `file` |
+| POST | `/api/v1/media/upload` | Same handler as above |
+| GET | `/api/v1/media?project_id=` | Filter by project |
+| GET | `/api/v1/media/:id` | |
+| DELETE | `/api/v1/media/:id` | |
 
 ```bash
 curl -X POST https://api.amaanworks.me/api/v1/media \
   -H "Authorization: Bearer $TOKEN" \
-  -F "project_id=7bf3b6e8-2512-4c28-98e3-514782bb0dc1" \
-  -F "file=@sample.mp4"
+  -F "project_id=<uuid>" \
+  -F "file=@video.mp4"
 ```
 
-The response is the media row. Status starts at uploaded and later becomes processing, then ready or failed. Read it back with GET /api/v1/media/:id, and read outputs with GET /api/v1/renditions?media_id=:id.
+## Jobs
 
-The process that encodes those jobs is [Workers](./workers). The queue those ids land on is [Architecture](./architecture).
+The upload path creates jobs automatically — you do not need to call `POST /api/v1/jobs` for normal usage. It exists if you need to trigger a specific processing task outside the standard upload flow (for example, requesting a transcode height that wasn't included initially).
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| POST | `/api/v1/jobs` | Body: `media_id`, `type` (`thumbnail`, `preview`, `transcode`). Transcode requires `target_height` of 360, 720, or 1080 |
+| GET | `/api/v1/jobs?media_id=` | |
+| GET | `/api/v1/jobs/:id` | Includes `error` field when the job failed |
+| DELETE | `/api/v1/jobs/:id` | |
+
+## Renditions
+
+Renditions are written by the worker process during encoding. The POST endpoint exists but you won't call it in normal usage.
+
+| Method | Path | Notes |
+| ------ | ---- | ----- |
+| POST | `/api/v1/renditions` | Written by the worker, not the client |
+| GET | `/api/v1/renditions?media_id=` | |
+| GET | `/api/v1/renditions/:id` | Includes the download URL |
+| DELETE | `/api/v1/renditions/:id` | |

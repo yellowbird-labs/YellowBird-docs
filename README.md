@@ -43,7 +43,7 @@ description: One sentence that can stand as the meta description.
 The first paragraph should say what the page is for.
 ```
 
-Internal links are relative (`./workers`). The site origin is `https://yellowbird.amaanworks.me` and the base is `/docs`, so a built link looks like `/docs/workers`.
+Internal links are relative (`./backend`). The site origin is `https://yellowbird.amaanworks.me` and the base is `/docs`, so a built link looks like `/docs/backend`. The sidebar order is Run it locally, Architecture, Backend, Web, Ops and cloud, API.
 
 ## License
 

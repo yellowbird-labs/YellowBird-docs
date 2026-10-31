@@ -8,7 +8,7 @@ export function baseOptions(): BaseLayoutProps {
       url: import.meta.env.BASE_URL,
     },
     themeSwitch: {
-      enabled: false,
+      enabled: true,
     },
     links: [
       {

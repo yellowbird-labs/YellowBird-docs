@@ -1,20 +1,22 @@
 ---
 title: Overview
-description: Documentation for YellowBird, a Go media pipeline. Upload, FFmpeg renditions, the HTTP API, and the worker.
+description: YellowBird is a video transcoding pipeline. Upload a file and get back a thumbnail, a preview clip, and H.264 renditions at 360p, 720p, and 1080p.
 ---
 
-YellowBird stores an upload in object storage and in a media row. The API publishes the job id on Redis. The worker claims that id and runs FFmpeg.
+YellowBird is a video transcoding service. You upload a file through the API or the web workspace, and the system produces a JPEG thumbnail, a 10-second preview clip, and H.264 streams at 360p, 720p, and 1080p. Encoding runs in a dedicated worker process separate from the HTTP server, so a heavy 4K encode never touches the API's response latency.
 
-The split exists because the first deployment was one t3.micro. A single 1080p upload exhausted memory and the kernel OOM killer froze the box, SSH included. The HTTP server and the encoder were the same process. They are now separate binaries.
+The project lives across three repositories with distinct responsibilities. The Go module handles everything server-side — receiving uploads, writing records to PostgreSQL, routing job IDs through Redis, and running FFmpeg in a separate binary. The Next.js workspace is the browser interface users authenticate against. The Terraform repository defines the AWS infrastructure running it all in production.
 
-A video upload fans out into five jobs: a JPEG thumbnail, a 10 second preview, and H.264 MP4s at 360p, 720p, and 1080p. An image upload gets the thumbnail and the preview. There is no HLS playlist in the worker. PostgreSQL is the record of what finished. Redis only delivers work.
+## Where to start
 
-The workspace you sign into is a Next.js app: projects, upload, job status, and renditions. It calls https://api.amaanworks.me. These docs are a separate site, served at /docs.
+**Running the system locally** — [Running locally](./run) gets both Go binaries started against a local Postgres and Redis instance in a few commands.
 
-| Piece | Where it lives |
-| --- | --- |
-| API and worker | Go module `github.com/dexisback/YellowBird` |
-| Workspace | Next.js app, routes `/`, `/login`, `/register`, `/library` |
-| Cloud | ECS Fargate, Terraform in `YellowBird-ops` |
+**Calling the HTTP API** — [API reference](./api) documents every endpoint, the authentication model, and request shapes. If you're integrating with YellowBird from an external system, start here.
 
-Start with the [architecture](./architecture) if you want the invariants, the [API](./api) if you are calling it, or [run it locally](./run) if you want the binaries on your machine.
+**Understanding the processing pipeline** — [Backend](./backend) covers the two-process architecture, the Redis queue design, FFmpeg flags, and how job status propagates back to the media record.
+
+**Browser workspace** — [Web](./web) explains how the Next.js app authenticates, uploads files over XHR for progress tracking, and polls for renditions until encoding finishes.
+
+**Infrastructure** — [Ops and cloud](./ops) covers the Fargate deployment, VPC layout, Terraform workflow, and the GitHub Actions deploy pipeline.
+
+**System design** — [Architecture](./architecture) traces a single upload from browser request to finished rendition, including what the recovery loop does when a worker crashes mid-encode.

@@ -1,50 +1,32 @@
 ---
 title: Architecture
-description: How YellowBird splits the Gin API from the FFmpeg worker. Postgres is the record. Redis Streams deliver job ids.
+description: How a single upload travels from the browser through the API, Redis, the worker, and object storage to produce finished renditions.
 ---
 
 import { PipelineStack } from '@/components/pipeline-stack';
 
 <PipelineStack />
 
-The API is a Gin server. The worker is a pool of goroutines blocked on a semaphore, WORKER_CONCURRENCY. They share PostgreSQL and Redis. They do not share a process.
+The browser never speaks to Redis or to the encoder. It sends a file to `cmd/api`. The API writes the bytes to object storage, records the upload in PostgreSQL, and publishes one message per job to a Redis stream. `cmd/worker` is a separate binary running its own event loop — it reads those messages, fetches the source from storage, runs FFmpeg, and writes results back to Postgres.
 
-## What is durable
+PostgreSQL is the authoritative record of what happened. Redis is the delivery mechanism. If the stream is flushed, the job rows remain in Postgres — the worker never invents work the database didn't authorize, because every message carries only a UUID that the worker loads from Postgres before doing anything.
 
-PostgreSQL holds users, projects, media, jobs, and renditions. Redis Streams are the delivery fabric: yellowbird:jobs for work, yellowbird:jobs:dlq for jobs that used up their attempts. If Redis is flushed, the job rows are still in Postgres. A worker will not invent a job the database does not have, because it loads the job by the id in the stream message.
+## Upload lifecycle
 
-Object storage holds the bytes. internal/storage picks the backend from config. STORAGE_PROVIDER=s3 uses Amazon S3 or an S3-compatible endpoint. Anything else uses Cloudinary. Production is S3. Keys look like yellowbird/&lt;uuid&gt;-&lt;name&gt;&lt;ext&gt;.
+The browser sends a multipart POST to `/api/v1/media` with `project_id`, `file`, and a JWT. The API checks that the project belongs to the authenticated user, then streams the file bytes to object storage under a key like `yellowbird/<uuid>-<sanitized-name><ext>`. Only after that upload succeeds does the API write the media row — if the database insert fails, the object is deleted to avoid orphans.
 
-internal/ws is a package comment. Nothing in the API serves a websocket, and there is no gRPC server on the request path.
+The media row starts at status `uploaded`. For a video MIME type, five jobs are created: thumbnail, preview, and H.264 transcodes at 360p, 720p, and 1080p. Any other file type gets thumbnail and preview only. Each job is a Postgres row plus an `XADD` of that row's UUID onto the stream `yellowbird:jobs`.
 
-## Upload to ready
+A worker in consumer group `yellowbird-workers` reads with `XREADGROUP`. Because sibling jobs for the same upload often run concurrently, `internal/worker/cache.go` keeps the source on local disk for 15 minutes, guarded by `singleflight` so concurrent goroutines share a single download. FFmpeg writes to a temp file. The worker uploads it, inserts a rendition row, and marks the job completed. `SyncStatus` then acquires a `SELECT FOR UPDATE` lock on the media row — when every sibling job is done, media becomes `ready`. One failed job moves media to `failed`, even if other renditions exist. The worker then calls `XACK`. Until that ack, the message stays in Redis's pending-entries list.
 
-1. The client sends POST /api/v1/media as multipart: project_id and file. The handler requires a JWT.
-2. The API streams the file to object storage, inserts a media row, and asks the job service to create child jobs. Each create inserts a jobs row and XADDs the job id.
-3. A worker in consumer group yellowbird-workers reads with XREADGROUP. Its consumer name is hostname and pid.
-4. Sibling jobs for the same source share one download. internal/worker/cache.go keeps the file on local disk for 15 minutes and uses singleflight so concurrent jobs do not each pull the object.
-5. FFmpeg writes a temp file. The worker uploads it, inserts a renditions row, and marks the job completed.
-6. SyncStatus locks the parent media row with SELECT FOR UPDATE. When every sibling job is finished, media becomes ready. A failed job that has exhausted retries moves the media row to failed.
-7. The worker XACKs the stream id. The message stays in the pending entries list until that ack.
+## Crash recovery
 
-## Attempts and crashes
+A recovery goroutine runs every 30 seconds. Any pending message idle for five minutes is claimed with `XCLAIM`. When the delivery count reaches three, the worker marks the job failed, runs `SyncStatus`, copies the message to `yellowbird:jobs:dlq`, and acknowledges the original. A job whose database status has already advanced past `queued` is acked and silently skipped.
 
-A recovery loop in the worker runs every 30 seconds. A pending message idle for 5 minutes is claimed with XCLAIM. After 3 deliveries (internal/queue/redis.go, maxRetries) the message moves to yellowbird:jobs:dlq, the job is marked failed, and the media row is synced.
+The `SELECT FOR UPDATE` lock is what prevents two workers completing sibling jobs simultaneously from both attempting the same state transition on the parent media row. Processing is at-least-once — the duplicate-delivery guard handles jobs that arrive twice.
 
-The ack happens after the rendition upload and the database write. A crash before the ack leaves the message pending, so another worker can claim it. Processing is at least once. The media lock is what keeps two workers from publishing two different parent statuses.
+Worker goroutines are detached from the process shutdown signal with `context.WithoutCancel`. A `SIGTERM` does not abort an in-flight FFmpeg call; the process waits for all running goroutines before exiting.
 
-## Tables
+## What isn't built
 
-Users own projects. A project contains media. Media has many jobs and many renditions. A rendition points at the job that produced it.
-
-| Table | Columns that matter |
-| --- | --- |
-| `users` | `id`, `name`, `email`, `password_hash` |
-| `projects` | `owner_id`, `name`, `description` |
-| `media` | `project_id`, `storage_key`, `mime_type`, `size`, `status`, duration and dimensions when known |
-| `jobs` | `media_id`, `type` (`thumbnail`, `preview`, `transcode`), `target_height`, `status`, `progress`, `error_message` |
-| `renditions` | `media_id`, `job_id`, `type`, `target_height`, `storage_key`, `url`, `mime_type`, `size` |
-
-Media status moves through pending, uploading, uploaded, processing, then ready or failed. Job status is queued, running, completed, or failed.
-
-FFmpeg flags are on [Workers](./workers). Hosts, IAM, and the deploy workflow are on [Cloud](./cloud).
+Several internal packages exist as package-level comments and nothing more: `internal/ws` (WebSockets), `internal/rl` (rate limiting), `internal/backpressure`, `internal/storagepolicy`, `internal/grpcserver`. Do not build a client against any of these — none are on the request path, and none produce responses. There is no HLS playlist in the worker; a video becomes JPEG, MP4 preview, and H.264 MP4s at the three target heights, and nothing else.
