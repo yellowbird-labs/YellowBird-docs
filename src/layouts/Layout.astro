@@ -8,6 +8,8 @@ interface Props {
   description?: string;
   documentTitle?: string;
   index?: boolean;
+  /** ISO 8601 mtime of the source file. Head metadata only. */
+  modified?: string;
 }
 
 const {
@@ -15,6 +17,7 @@ const {
   description = 'Documentation for YellowBird, a Go media pipeline.',
   documentTitle,
   index = true,
+  modified,
 } = Astro.props;
 
 const site = Astro.site ?? new URL('https://yellowbird.amaanworks.me');
@@ -60,6 +63,9 @@ if (index) {
     url: canonical.href,
     mainEntityOfPage: canonical.href,
     image: image.href,
+    ...(modified ? { dateModified: modified } : {}),
+    author: { '@type': 'Organization', name: 'YellowBird' },
+    publisher: { '@id': `${siteUrl}#website` },
     isPartOf: { '@id': `${siteUrl}#website` },
     about: {
       '@type': 'SoftwareSourceCode',
@@ -96,6 +102,10 @@ const robots = index ? 'index, follow, max-image-preview:large, max-snippet:-1' 
     <meta name="robots" content={robots} />
     <meta name="theme-color" content="#ffffff" />
     <link rel="canonical" href={canonical.href} />
+    <link rel="alternate" hreflang="en" href={canonical.href} />
+    <link rel="alternate" hreflang="x-default" href={canonical.href} />
+    <link rel="sitemap" type="application/xml" href={`${basePath}/sitemap-index.xml`} />
+    <link rel="alternate" type="application/rss+xml" title="YellowBird docs" href={`${basePath}/rss.xml`} />
     <link rel="icon" href={`${basePath}/favicon.svg`} type="image/svg+xml" />
     <link rel="preload" href={interLatin} as="font" type="font/woff2" crossorigin />
     <meta property="og:type" content={kind} />
@@ -107,7 +117,10 @@ const robots = index ? 'index, follow, max-image-preview:large, max-snippet:-1' 
     <meta property="og:image" content={image.href} />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/png" />
     <meta property="og:image:alt" content="YellowBird docs" />
+    {modified ? <meta property="og:updated_time" content={modified} /> : null}
+    {modified && kind === 'article' ? <meta property="article:modified_time" content={modified} /> : null}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content={fullTitle} />
     <meta name="twitter:description" content={description} />

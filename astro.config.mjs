@@ -38,6 +38,8 @@ export default defineConfig({
         if (!slug) return item;
         const file = new URL(`./content/docs/${slug}.mdx`, import.meta.url);
         item.lastmod = statSync(file).mtime.toISOString();
+        item.changefreq = slug === 'index' ? 'weekly' : 'monthly';
+        item.priority = slug === 'index' ? 1 : 0.8;
         return item;
       },
     }),

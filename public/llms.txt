@@ -4,6 +4,9 @@
 
 The docs live at https://yellowbird.amaanworks.me/docs. The API origin is https://api.amaanworks.me. The Go module is https://github.com/dexisback/YellowBird. The workspace is a separate Next.js app. AWS is a separate Terraform repo.
 
+Sitemap: https://yellowbird.amaanworks.me/docs/sitemap-index.xml
+Feed: https://yellowbird.amaanworks.me/docs/rss.xml
+
 ## Docs
 
 - [YellowBird docs](https://yellowbird.amaanworks.me/docs): How the API, workspace, and cloud repos connect.

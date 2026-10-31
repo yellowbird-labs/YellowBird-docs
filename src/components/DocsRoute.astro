@@ -1,6 +1,6 @@
 ---
 import { statSync, readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import Layout from '@/layouts/Layout.astro';
 import { Docs } from '@/components/docs';
 import type { source } from '@/lib/source';
@@ -32,15 +32,16 @@ const params = Object.fromEntries(
 
 // Read raw MDX source and last-modified date
 const slugPath = page.slugs.length > 0 ? page.slugs.join('/') : 'index';
-const mdxPath = new URL(`../../content/docs/${slugPath}.mdx`, import.meta.url);
 let rawMdx = '';
 let lastModified = '';
+let modifiedIso = '';
 try {
-  const filePath = fileURLToPath(mdxPath);
+  const filePath = join(process.cwd(), 'content/docs', `${slugPath}.mdx`);
   rawMdx = readFileSync(filePath, 'utf-8');
   // Strip frontmatter for the "Copy as Markdown" content
   rawMdx = rawMdx.replace(/^---[\s\S]*?---\n/, '').trim();
   const stat = statSync(filePath);
+  modifiedIso = stat.mtime.toISOString();
   lastModified = stat.mtime.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -55,6 +56,7 @@ try {
   title={page.data.title}
   description={page.data.description}
   documentTitle={documentTitles[path] ?? `${page.data.title} · YellowBird docs`}
+  modified={modifiedIso || undefined}
 >
   <Docs
     client:load
