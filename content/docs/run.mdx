@@ -1,0 +1,48 @@
+---
+title: Run it
+description: Start Postgres, Redis, the API, and the worker on your machine.
+---
+
+You need Go 1.26 or newer, Docker, and FFmpeg if the worker runs outside a container. The module is `github.com/dexisback/YellowBird`.
+
+```bash
+cp .env.example .env
+```
+
+| Variable | What it is | Example |
+| --- | --- | --- |
+| `PORT` | API listen port | `8080` |
+| `DATABASE_URL` | Postgres | `postgres://postgres:postgres@localhost:5432/yellowbird?sslmode=disable` |
+| `JWT_SECRET` | HMAC secret for login tokens | a long random string |
+| `REDIS_ADDR` | Redis host | `localhost:6379` |
+| `REDIS_PASSWORD` | Empty for local Redis | |
+| `REDIS_DB` | Database index | `0` |
+| `STORAGE_PROVIDER` | `s3` or omit for Cloudinary | `s3` |
+| `S3_BUCKET`, `S3_REGION` | Required when the provider is `s3` | |
+| `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | Used when the provider is not `s3` | |
+| `WORKER_CONCURRENCY` | Parallel FFmpeg processes | `4` |
+
+Do not commit `.env`.
+
+Backing services only:
+
+```bash
+docker compose -f deployments/docker-compose.yml up -d redis
+```
+
+API and worker on the host, with Postgres already running:
+
+```bash
+go run ./cmd/api
+go run ./cmd/worker
+```
+
+The compose file can also build the API and the worker. Read `deployments/docker-compose.yml` before you assume it starts Postgres. The README in the Go repo starts Redis from that file and expects you to point `DATABASE_URL` at a database you already have.
+
+Check the process:
+
+```bash
+curl -s http://localhost:8080/health
+```
+
+Then register, log in, create a project, and upload. The calls are on the [API](./api) page. The workspace is optional for that loop. Set `NEXT_PUBLIC_API_URL` to `http://localhost:8080` if you run the Next.js app against this API.

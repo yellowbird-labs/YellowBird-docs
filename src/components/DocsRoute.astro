@@ -1,0 +1,33 @@
+---
+import Layout from '@/layouts/Layout.astro';
+import { Docs } from '@/components/docs';
+import type { source } from '@/lib/source';
+
+type Page = ReturnType<typeof source.getPages>[number];
+
+interface Props {
+  page: Page;
+  pageTree: Awaited<ReturnType<typeof source.serializePageTree>>;
+}
+
+const { page, pageTree } = Astro.props;
+const { body: Content, toc } = await page.data.load();
+const params = Object.fromEntries(
+  Object.entries(Astro.params).map(([key, value]) => [key, value == null ? undefined : String(value)]),
+);
+---
+
+<Layout title={page.data.title} description={page.data.description}>
+  <Docs
+    client:load
+    transition:persist="docs"
+    pathname={Astro.url.pathname}
+    params={params}
+    tree={pageTree}
+    title={page.data.title}
+    description={page.data.description}
+    toc={toc}
+  >
+    <Content />
+  </Docs>
+</Layout>

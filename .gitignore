@@ -1,0 +1,14 @@
+plan.md
+node_modules
+dist
+.astro
+.agents/*
+PHASES.md
+.vscode/*
+.env
+.DS_Store
+.idea/*
+.vscode/*
+.vscode/*
+.fx/*
+.pi/*

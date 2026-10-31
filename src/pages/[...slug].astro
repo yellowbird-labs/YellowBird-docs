@@ -1,0 +1,24 @@
+---
+import type { GetStaticPaths, InferGetStaticPropsType } from 'astro';
+import DocsRoute from '@/components/DocsRoute.astro';
+import { source } from '@/lib/source';
+
+export const prerender = true;
+
+export const getStaticPaths = (() => {
+  return source
+    .getPages()
+    .filter((page) => page.slugs.length > 0)
+    .map((page) => ({
+      params: { slug: page.slugs.join('/') },
+      props: { page },
+    }));
+}) satisfies GetStaticPaths;
+
+type Props = InferGetStaticPropsType<typeof getStaticPaths>;
+
+const { page } = Astro.props;
+const pageTree = await source.serializePageTree(source.getPageTree());
+---
+
+<DocsRoute page={page} pageTree={pageTree} />

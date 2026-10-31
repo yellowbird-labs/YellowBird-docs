@@ -1,0 +1,14 @@
+---
+import DocsRoute from '@/components/DocsRoute.astro';
+import { source } from '@/lib/source';
+
+export const prerender = true;
+
+const page = source.getPage([]);
+if (!page) {
+  throw new Error('Missing content/docs/index.mdx');
+}
+const pageTree = await source.serializePageTree(source.getPageTree());
+---
+
+<DocsRoute page={page} pageTree={pageTree} />

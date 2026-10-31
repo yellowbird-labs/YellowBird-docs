@@ -1,0 +1,58 @@
+---
+title: API
+description: HTTP routes on the Gin server, which ones require a JWT, and the upload body.
+---
+
+Base URL in production: `https://api.amaanworks.me`. Versioned routes live under `/api/v1`. Send `Authorization: Bearer <token>` on every route that says protected. The token is the `token` field from login.
+
+`GET /health` is outside the version prefix. The handler returns:
+
+```json
+{ "status": "ok (also my first gin response)" }
+```
+
+## Auth
+
+| Method | Path | Auth | Body |
+| --- | --- | --- | --- |
+| `POST` | `/api/v1/users/register` | Public | `name` (2–100), `email`, `password` (8–72) |
+| `POST` | `/api/v1/users/login` | Public | `email`, `password` |
+
+Login returns `{ "token", "user" }`. `user` is `id`, `name`, `email`, `created_at`, `updated_at`. A bad password is `invalid email or password`. Passwords are bcrypt hashes.
+
+`GET /api/v1/users`, `GET /api/v1/users/:id`, and `DELETE /api/v1/users/:id` are registered on the users group in `internal/domain/user/routes.go` without the JWT middleware. Projects, media, jobs, and renditions all call `middleware.Auth`. The user routes do not.
+
+## Projects, media, jobs, renditions
+
+All of these require a JWT.
+
+| Method | Path | Notes |
+| --- | --- | --- |
+| `POST` | `/api/v1/projects` | JSON `name`, optional `description` |
+| `GET` | `/api/v1/projects` | Projects for the caller |
+| `GET` | `/api/v1/projects/:id` | |
+| `PUT` | `/api/v1/projects/:id` | |
+| `DELETE` | `/api/v1/projects/:id` | |
+| `POST` | `/api/v1/media` | Multipart `project_id` and `file`. `POST /api/v1/media/upload` is the same handler |
+| `GET` | `/api/v1/media?project_id=` | |
+| `GET` | `/api/v1/media/:id` | Status and metadata |
+| `DELETE` | `/api/v1/media/:id` | |
+| `POST` | `/api/v1/jobs` | `type` is `thumbnail`, `preview`, or `transcode`. Transcode requires `target_height` of 360, 720, or 1080 |
+| `GET` | `/api/v1/jobs?media_id=` | |
+| `GET` | `/api/v1/jobs/:id` | Includes the error string when the job failed |
+| `DELETE` | `/api/v1/jobs/:id` | |
+| `POST` | `/api/v1/renditions` | Usually written by the worker, not the workspace |
+| `GET` | `/api/v1/renditions?media_id=` | |
+| `GET` | `/api/v1/renditions/:id` | Includes the download URL |
+| `DELETE` | `/api/v1/renditions/:id` | |
+
+You do not need to create jobs yourself for a normal upload. `internal/domain/media/service.go` creates the thumbnail and preview jobs, and for a `video/*` MIME type it also creates transcodes at 360, 720, and 1080. Each of those calls inserts the row and enqueues the id.
+
+```bash
+curl -X POST https://api.amaanworks.me/api/v1/media \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "project_id=7bf3b6e8-2512-4c28-98e3-514782bb0dc1" \
+  -F "file=@sample.mp4"
+```
+
+The response is the media row. `status` starts at `uploaded` and later becomes `processing`, then `ready` or `failed`. Read it back with `GET /api/v1/media/:id`, and read outputs with `GET /api/v1/renditions?media_id=:id`.

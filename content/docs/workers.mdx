@@ -1,0 +1,32 @@
+---
+title: Workers
+description: Redis consumer group, FFmpeg flags for each rendition, and when a job lands on the dead-letter stream.
+---
+
+`go run ./cmd/worker` joins consumer group `yellowbird-workers` on stream `yellowbird:jobs`. One process runs up to `WORKER_CONCURRENCY` FFmpeg jobs. The slot is a buffered channel used as a semaphore. The default in the API README is 4.
+
+The worker creates the consumer group on startup if it is missing (`XGROUP CREATE` with `MKSTREAM`). Each message value is a job id. The worker loads that job from PostgreSQL before it encodes.
+
+## Profiles
+
+Flags below are the ones in `internal/worker`. The preset is `veryfast` for preview and transcode.
+
+| Job | When | FFmpeg |
+| --- | --- | --- |
+| `thumbnail` | Every upload | `-frames:v 1 -q:v 2`, JPEG |
+| `preview` | Every upload | `-t 10 -c:v libx264 -preset veryfast -crf 28 -c:a aac -movflags +faststart`, 10 second MP4 |
+| `transcode` | `video/*` only | `-vf scale=-2:<height> -c:v libx264 -preset veryfast -crf 23 -c:a aac -b:a 128k -movflags +faststart` |
+
+`scale=-2` keeps the width even, which H.264 wants. Height is 360, 720, or 1080. Thumbnail and preview reject a target height. Transcode rejects any other height (`internal/domain/job`).
+
+Every command sets `-threads 0` and `-y`. Output is a temp file, then an upload. The source file comes from the disk cache in `internal/worker/cache.go` (15 minute TTL, `singleflight` around the download).
+
+## Failure
+
+| Condition | Result |
+| --- | --- |
+| FFmpeg or upload error, attempts remaining | Job goes back to `queued`. The stream message stays pending. |
+| Pending message idle for 5 minutes | Recovery loop (`30s` ticker) `XCLAIM`s it. |
+| `deliveryCount >= 3` | Message is copied to `yellowbird:jobs:dlq`, job is `failed`, `SyncStatus` runs, original message is acked. |
+
+`SyncStatus` is a transaction that locks the media row. Workers finishing 360p and 1080p at the same time cannot both decide the parent status.

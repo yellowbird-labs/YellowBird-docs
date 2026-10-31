@@ -1,0 +1,50 @@
+---
+title: Architecture
+description: Two Go binaries, PostgreSQL as the record, Redis Streams as the queue, and object storage for bytes.
+---
+
+import { PipelineStack } from '@/components/pipeline-stack';
+
+<PipelineStack />
+
+`cmd/api` is a Gin server. `cmd/worker` is a pool of goroutines blocked on a semaphore (`WORKER_CONCURRENCY`). They share PostgreSQL and Redis. They do not share a process.
+
+## What is durable
+
+PostgreSQL holds users, projects, media, jobs, and renditions. Redis Streams are the delivery fabric: `yellowbird:jobs` for work, `yellowbird:jobs:dlq` for jobs that used up their attempts. If Redis is flushed, the job rows are still in Postgres. A worker will not invent a job the database does not have, because it loads the job by the id in the stream message.
+
+Object storage holds the bytes. `internal/storage` picks the backend from config. `STORAGE_PROVIDER=s3` uses Amazon S3 (or an S3-compatible endpoint). Anything else uses Cloudinary. Production is S3. Keys look like `yellowbird/<uuid>-<name><ext>`.
+
+`internal/ws` is a package comment. Nothing in `cmd/api` serves a websocket, and there is no gRPC server on the request path.
+
+## Upload to ready
+
+1. The client sends `POST /api/v1/media` as multipart: `project_id` and `file`. The handler requires a JWT.
+2. The API streams the file to object storage, inserts a `media` row, and asks the job service to create child jobs. Each `CreateJob` inserts a `jobs` row and `XADD`s the job id.
+3. A worker in consumer group `yellowbird-workers` reads with `XREADGROUP`. Its consumer name is `<hostname>-<pid>`.
+4. Sibling jobs for the same source share one download. `internal/worker/cache.go` keeps the file on local disk for 15 minutes and uses `singleflight` so concurrent jobs do not each pull the object.
+5. FFmpeg writes a temp file. The worker uploads it, inserts a `renditions` row, and marks the job completed.
+6. `SyncStatus` locks the parent media row with `SELECT FOR UPDATE`. When every sibling job is finished, media becomes `ready`. A failed job that has exhausted retries moves the media row to `failed`.
+7. The worker `XACK`s the stream id. The message stays in the pending entries list until that ack.
+
+## Attempts and crashes
+
+A recovery loop in the worker runs every 30 seconds. A pending message idle for 5 minutes is claimed with `XCLAIM`. `deliveryCount >= 3` (`internal/queue/redis.go`, `maxRetries`) moves the message to `yellowbird:jobs:dlq`, marks the job failed, and syncs the media row.
+
+The ack happens after the rendition upload and the database write. A crash before the ack leaves the message pending, so another worker can claim it. Processing is at least once. The media lock is what keeps two workers from publishing two different parent statuses.
+
+## Tables
+
+`users` own `projects`. A project contains `media`. Media has many `jobs` and many `renditions`. A rendition points at the job that produced it.
+
+| Table | Columns that matter |
+| --- | --- |
+| `users` | `id`, `name`, `email`, `password_hash` |
+| `projects` | `owner_id`, `name`, `description` |
+| `media` | `project_id`, `storage_key`, `mime_type`, `size`, `status`, duration and dimensions when known |
+| `jobs` | `media_id`, `type` (`thumbnail`, `preview`, `transcode`), `target_height`, `status`, `progress`, `error_message` |
+| `renditions` | `media_id`, `job_id`, `type`, `target_height`, `storage_key`, `url`, `mime_type`, `size` |
+
+Media status moves through `pending`, `uploading`, `uploaded`, `processing`, then `ready` or `failed`. Job status is `queued`, `running`, `completed`, or `failed`.
+
+FFmpeg flags are on [Workers](./workers). Hosts, IAM, and the deploy workflow are on [Cloud](./cloud).
