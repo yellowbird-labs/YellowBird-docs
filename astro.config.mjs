@@ -20,6 +20,7 @@ const docPages = {
 export default defineConfig({
   site: 'https://yellowbird.amaanworks.me',
   base: '/docs',
+  output: 'static',
   trailingSlash: 'never',
   integrations: [
     fumadocs({
