@@ -2,6 +2,7 @@ doc-writing-skill.md
 plan.md
 node_modules
 dist
+.dist-flat
 .astro
 .agents/*
 PHASES.md

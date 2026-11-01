@@ -8,7 +8,7 @@
   },
   "scripts": {
     "dev": "node --import ./scripts/register-react-opts.mjs ./node_modules/astro/bin/astro.mjs dev",
-    "build": "node --import ./scripts/register-react-opts.mjs ./node_modules/astro/bin/astro.mjs build",
+    "build": "node --import ./scripts/register-react-opts.mjs ./node_modules/astro/bin/astro.mjs build && node ./scripts/nest-docs.mjs",
     "preview": "astro preview"
   },
   "dependencies": {

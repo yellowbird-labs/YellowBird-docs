@@ -30,16 +30,15 @@ Order comes from `content/docs/meta.json`:
 
 Import this repo in Vercel as its own project. The build command is `npm run build`, the output directory is `dist`, and Node is 22.23.4 or newer (`engines` and `.nvmrc`). Do not attach `yellowbird.amaanworks.me` to this project. That host stays on `yellowbird-web`.
 
-`vercel.json` serves the static files, which Astro writes at the root of `dist`, under the public `/docs` prefix the HTML already uses. Opening the Vercel URL redirects `/` to `/docs`.
+On Vercel the build moves those files under `dist/docs`, which is the path the HTML already requests. Opening the Vercel URL redirects `/` to `/docs`. The live project host is `https://yellow-bird-docs.vercel.app`.
 
 The public URL stays `https://yellowbird.amaanworks.me/docs`. On `yellowbird-web`, proxy that path to this deployment (replace the host with the Vercel project URL):
 
 ```ts
 async rewrites() {
-  const docs = 'https://<this-project>.vercel.app';
   return [
-    { source: '/docs', destination: `${docs}/docs` },
-    { source: '/docs/:path*', destination: `${docs}/docs/:path*` },
+    { source: '/docs', destination: 'https://yellow-bird-docs.vercel.app/docs' },
+    { source: '/docs/:path*', destination: 'https://yellow-bird-docs.vercel.app/docs/:path*' },
   ];
 }
 ```
